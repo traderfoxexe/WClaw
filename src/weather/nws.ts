@@ -1,4 +1,5 @@
 import { logger } from "../logger.js";
+import { fetchWithRetry } from "../utils/retry.js";
 import type { CityConfig } from "../types.js";
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -31,7 +32,7 @@ export async function fetchNWSForecast(city: CityConfig): Promise<NWSForecast | 
 
   try {
     const url = `https://api.weather.gov/gridpoints/${city.nwsGridId}/${city.nwsGridX},${city.nwsGridY}/forecast`;
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       headers: { "User-Agent": "WeatherClaw/1.0 (weather-bot)" },
     });
 

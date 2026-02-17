@@ -1,4 +1,5 @@
 import { logger } from "../logger.js";
+import { fetchWithRetry } from "../utils/retry.js";
 import type { CityConfig, EnsembleForecast, DailyForecast } from "../types.js";
 
 const ENSEMBLE_MEMBERS = 31;
@@ -26,7 +27,7 @@ export async function fetchEnsemble(city: CityConfig): Promise<EnsembleForecast>
 
   logger.debug({ city: city.name }, "Fetching GFS ensemble");
 
-  const res = await fetch(url.toString());
+  const res = await fetchWithRetry(url.toString());
   if (!res.ok) {
     throw new Error(`Open-Meteo ensemble API error: ${res.status} ${res.statusText}`);
   }

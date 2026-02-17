@@ -1,4 +1,5 @@
 import { logger } from "../logger.js";
+import { fetchWithRetry } from "../utils/retry.js";
 import { CITIES } from "../config.js";
 import type { RawMarket, CityConfig } from "../types.js";
 
@@ -39,7 +40,7 @@ function buildEventSlugs(): string[] {
 async function fetchEvent(slug: string): Promise<GammaEventResponse | null> {
   try {
     const url = `${GAMMA_API}/events?slug=${slug}`;
-    const res = await fetch(url);
+    const res = await fetchWithRetry(url, {}, 2, 500);
     if (!res.ok) return null;
     const data = (await res.json()) as GammaEventResponse[];
     return data.length > 0 ? data[0] : null;

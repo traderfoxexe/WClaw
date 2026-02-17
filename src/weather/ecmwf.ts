@@ -1,4 +1,5 @@
 import { logger } from "../logger.js";
+import { fetchWithRetry } from "../utils/retry.js";
 import type { CityConfig, EnsembleForecast, DailyForecast } from "../types.js";
 
 const ENSEMBLE_MEMBERS = 51; // ECMWF has 51 members (1 control + 50 perturbed)
@@ -30,7 +31,7 @@ export async function fetchEcmwfEnsemble(city: CityConfig): Promise<EnsembleFore
 
   logger.debug({ city: city.name }, "Fetching ECMWF ensemble");
 
-  const res = await fetch(url.toString());
+  const res = await fetchWithRetry(url.toString());
   if (!res.ok) {
     throw new Error(`ECMWF ensemble API error: ${res.status} ${res.statusText}`);
   }

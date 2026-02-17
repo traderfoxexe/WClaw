@@ -1,4 +1,5 @@
 import { logger } from "../logger.js";
+import { fetchWithRetry } from "../utils/retry.js";
 import { CITIES } from "../config.js";
 import { getSettlement, upsertSettlement, settlePosition, getOpenPositions } from "../store/db.js";
 import { onSettlement } from "../engine/risk.js";
@@ -17,7 +18,7 @@ export async function fetchCLIReport(station: string, date: string): Promise<CLI
   const url = `https://mesonet.agron.iastate.edu/json/cli.py?station=${station}&year=${year}`;
 
   try {
-    const res = await fetch(url);
+    const res = await fetchWithRetry(url, {}, 2, 2000);
     if (!res.ok) {
       logger.warn({ station, status: res.status }, "CLI API error");
       return null;

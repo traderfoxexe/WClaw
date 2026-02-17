@@ -7,9 +7,11 @@
     "dev": "bun run src/index.ts",
     "paper": "MODE=paper bun run src/index.ts",
     "live": "MODE=live bun run src/index.ts",
+    "test": "bun test",
     "scan": "bun run src/commands/scan.ts",
     "settle": "bun run src/commands/settle.ts",
-    "status": "bun run src/commands/status.ts"
+    "status": "bun run src/commands/status.ts",
+    "backtest": "bun run src/engine/backtest.ts"
   },
   "dependencies": {
     "@polymarket/clob-client": "^3.0.0",

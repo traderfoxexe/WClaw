@@ -1,4 +1,5 @@
 import { logger } from "../logger.js";
+import { fetchWithRetry } from "../utils/retry.js";
 
 const CLOB_API = "https://clob.polymarket.com";
 
@@ -17,7 +18,7 @@ export interface OrderBookSummary {
 export async function fetchOrderBook(tokenId: string): Promise<OrderBookSummary | null> {
   try {
     const url = `${CLOB_API}/book?token_id=${tokenId}`;
-    const res = await fetch(url);
+    const res = await fetchWithRetry(url, {}, 2, 500);
     if (!res.ok) {
       logger.warn({ tokenId, status: res.status }, "Order book fetch failed");
       return null;
