@@ -16,6 +16,7 @@ Everything checked off below is built, tested, and working.
 [x] Quarter-Kelly position sizer with bankroll caps
 [x] Paper trade execution (log to SQLite, no real money)
 [x] Live trade execution module (CLOB client integration, UNTESTED with real money)
+[x] Live execution hardening — pre-flight wallet/gas/API checks, order book-aware limit pricing
 [x] Settlement tracker via Iowa State CLI API
 [x] Circuit breaker (3 consecutive losses pauses trading)
 [x] SQLite storage: signals, positions, settlements tables
@@ -23,7 +24,11 @@ Everything checked off below is built, tested, and working.
 [x] Web dashboard at localhost:3456 (glassmorphism, equity curve, city heatmap)
 [x] OpenClaw one-shot commands: scan.ts, settle.ts, status.ts
 [x] OpenClaw skill package: SKILL.md + scripts/scan.sh, settle.sh, status.sh
-[x] package.json scripts: paper, live, scan, settle, status
+[x] package.json scripts: paper, live, scan, settle, status, backtest, test
+[x] Test suite — 55 tests: probability, parser, edge, sizing (bun test)
+[x] Backtest engine — historical simulation with per-city breakdown (bun run backtest)
+[x] Retry logic — fetchWithRetry with exponential backoff on 429/5xx, wired into all 6 API callers
+[x] CLAUDE.md — project conventions and instructions for Claude Code users
 [x] README and ROADMAP documentation
 ```
 
@@ -40,6 +45,9 @@ First paper run found 10 positions with edges from 9.6% to 66% across NYC, Chica
 ```
 [ ] Run bot in paper mode for 5 days straight
     - Use: bun run paper (continuous loop) or bun run scan (one-shot, every minute)
+[ ] Run backtest to get a historical baseline
+    - Use: bun run backtest --days 30
+    - Compare backtest win rate to live paper results
 [ ] Check settlements each morning
     - Use: bun run settle
     - NWS CLI reports publish 7-9 AM local time
@@ -85,6 +93,7 @@ First paper run found 10 positions with edges from 9.6% to 66% across NYC, Chica
       MAX_POSITION_PCT=0.10
       MAX_OPEN_POSITIONS=5
 [ ] Run: MODE=live bun run src/index.ts
+[ ] Pre-flight checks will run automatically (wallet balance, gas, CLOB API)
 [ ] Verify first live order fills on Polymarket
 [ ] Check: actual fill price vs expected, any slippage
 [ ] First live settlement — compare paper vs live results
@@ -92,7 +101,7 @@ First paper run found 10 positions with edges from 9.6% to 66% across NYC, Chica
 [ ] Screenshot equity curve for marketing
 ```
 
-**Note:** The CLOB client integration is built but untested with real money. If `@polymarket/clob-client` doesn't work with Bun, fall back to direct REST + ethers EIP-712 signing in `src/market/execution.ts`.
+**Note:** The CLOB client integration is built with pre-flight checks and order book-aware pricing, but untested with real money. If `@polymarket/clob-client` doesn't work with Bun, fall back to direct REST + ethers EIP-712 signing in `src/market/execution.ts`.
 
 **Exit criteria:** Win rate > 55% on live trades. Positive real P&L. No execution bugs.
 

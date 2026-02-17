@@ -26,6 +26,11 @@ Everything below is working and tested:
 - **SQLite storage** — signals, positions, settlements tables with WAL mode
 - **OpenClaw commands** — `scan.ts`, `settle.ts`, `status.ts` one-shot CLI commands (tested, working)
 - **OpenClaw skill package** — `openclaw/SKILL.md` manifest + `openclaw/scripts/*.sh` wrappers
+- **Test suite** — 55 tests across probability, parser, edge, and sizing modules (`bun test`)
+- **Backtest engine** — `src/engine/backtest.ts` simulates trades against historical data with per-city breakdown
+- **Retry logic** — `src/utils/retry.ts` with exponential backoff on 429/5xx, wired into all 6 API callers
+- **Live execution hardening** — pre-flight wallet/gas/API checks, order book-aware limit pricing
+- **CLAUDE.md** — project conventions and instructions for Claude Code users
 
 ### Quick Start
 
@@ -39,6 +44,14 @@ bun run paper
 bun run scan      # Fetch weather → scan markets → generate signals → execute
 bun run settle    # Check NWS settlements → update P&L
 bun run status    # JSON report of positions + stats
+
+# Backtest (simulate against historical data)
+bun run backtest              # 14 days, all cities
+bun run backtest --days 30    # 30 days
+bun run backtest --city nyc   # NYC only
+
+# Tests
+bun test
 
 # Web dashboard
 open http://localhost:3456
@@ -81,7 +94,7 @@ src/
     discovery.ts           Polymarket Gamma API — finds active weather events
     parser.ts              Regex parser — market titles to structured brackets
     orderbook.ts           CLOB API — order book depth + best bid/ask
-    execution.ts           Paper trade + live order placement
+    execution.ts           Paper trade + live order placement (pre-flight checks, order book-aware pricing)
 
   engine/
     edge.ts                Edge = model probability - market price
@@ -89,6 +102,7 @@ src/
     signals.ts             Signal generator with volume/time/edge filters
     consensus.ts           Multi-model weighted consensus (GFS 1.0x, ECMWF 1.2x)
     risk.ts                Circuit breaker, exposure limits
+    backtest.ts            Historical simulation engine
 
   settlement/
     tracker.ts             Iowa State CLI API — actual observed temperatures
@@ -98,9 +112,18 @@ src/
     db.ts                  bun:sqlite wrapper (WAL mode)
     schema.ts              Table definitions (signals, positions, settlements)
 
+  utils/
+    retry.ts               fetchWithRetry — exponential backoff on 429/5xx
+
   cli/
     dashboard.ts           Terminal ASCII dashboard
     web.ts                 Web dashboard at localhost:3456
+
+tests/                     Test suite (55 tests)
+  probability.test.ts      Bucket probability math + boundary conditions
+  parser.test.ts           Market title parsing — all bracket types, all cities
+  edge.test.ts             Edge calculation + side selection
+  sizing.test.ts           Kelly formula + position caps
 
 openclaw/                  OpenClaw skill package (BUILT)
   SKILL.md                 Skill manifest with YAML frontmatter
@@ -216,6 +239,37 @@ All three commands are tested and working. `bun run scan`, `bun run settle`, `bu
 
 ---
 
+## Testing
+
+55 tests covering core logic:
+
+```bash
+bun test
+```
+
+| Test file | What it covers |
+|-----------|----------------|
+| `tests/probability.test.ts` | Bucket probability math, boundary conditions (inclusive min, exclusive max), empty forecasts, math invariants (above+below=1.0) |
+| `tests/parser.test.ts` | All 3 bracket types, all 6 cities, date parsing, token ID mapping, malformed input handling |
+| `tests/edge.test.ts` | YES vs NO side selection, null cases (no edge, missing data), edge when hugely mis-priced |
+| `tests/sizing.test.ts` | Kelly formula, maxPositionPct cap, zero bankroll, rounding to cents |
+
+---
+
+## Backtest
+
+Simulates what the bot would have traded over historical data:
+
+```bash
+bun run backtest                # 14 days, all 6 cities
+bun run backtest --days 30      # 30-day window
+bun run backtest --city nyc     # Single city
+```
+
+Uses historical GFS ensemble from Open-Meteo and actual settlement data from Iowa State CLI API. Generates synthetic brackets around the median forecast and simulates trades. Outputs: total trades, win rate, P&L, average edge, max drawdown, and per-city breakdown.
+
+---
+
 ## Key APIs
 
 | API | Auth | Rate Limit | Used For |
@@ -225,6 +279,8 @@ All three commands are tested and working. `bun run scan`, `bun run settle`, `bu
 | Polymarket Gamma API | None | Generous | Market discovery + prices |
 | Polymarket CLOB API | EIP-712 + HMAC (live only) | Per-account | Order placement |
 | Iowa State CLI | None | Fair use | Settlement data |
+
+All API calls use `fetchWithRetry` with exponential backoff on 429 and 5xx errors.
 
 ---
 
@@ -236,11 +292,7 @@ Ordered by impact on profitability. Build top-to-bottom.
 
 Run `bun run paper` for 5 days. Get 50+ settled trades. If win rate < 55%, debug before doing anything else.
 
-**Backtest engine** — `src/engine/backtest.ts` (new)
-- Pull historical ensemble data and historical market prices
-- Simulate what the bot would have traded over the past 30 days
-- Output: win rate, P&L, Sharpe ratio, max drawdown by city
-- This tells you whether to proceed or pivot
+Run `bun run backtest --days 30` to get a historical baseline. Compare backtest results to live paper results.
 
 **Temperature rounding audit** — `src/weather/ensemble.ts:83`
 - Currently rounds daily highs with `Math.round()` — verify this matches Polymarket bracket definitions
@@ -274,11 +326,6 @@ Run `bun run paper` for 5 days. Get 50+ settled trades. If win rate < 55%, debug
 - Apply correction: `adjusted_prob = raw_prob + city_bias[city][month]`
 
 ### 3. Improve Execution
-
-**Order book-aware pricing** — `src/market/execution.ts:146`
-- Currently uses reported `outcomePrices` as the limit price
-- Should fetch actual order book, check best ask, set limit at or below best ask
-- If spread > 5 cents, use midpoint pricing
 
 **Position exit strategy** — `src/market/exit.ts` (new)
 - Currently holds until settlement (binary: $0 or $1)
@@ -341,7 +388,6 @@ Built-in (no npm install): `bun:sqlite`, `fetch()`, `crypto.randomUUID()`, `Bun.
 
 - **Gamma API `tag` param is broken** — does NOT filter. Bot uses event slugs instead: `highest-temperature-in-{city}-on-{month}-{day}-{year}`
 - **`@polymarket/clob-client` + Bun compatibility** — untested in live mode. May need fallback to direct REST + ethers EIP-712 signing
-- **Git remote** — currently points to wrong repo (`not-manuu/percolator-claw`). Create a new repo and update the remote
 - **Settlement data lag** — NWS CLI reports lag 12-24 hours. Settlement checker retries hourly
 
 ---
